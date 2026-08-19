@@ -1,0 +1,23 @@
+{
+  "name": "@notify/workers",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@notify/db": "workspace:*",
+    "@notify/types": "workspace:*",
+    "@notify/queue": "workspace:*",
+    "resend": "^3.2.0",
+    "ioredis": "^5.3.0"
+  },
+  "devDependencies": {
+    "@notify/typescript-config": "workspace:*",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.0"
+  }
+}

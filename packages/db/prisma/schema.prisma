@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Auth --------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  name         String?
+  picture      String?
+  googleId     String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projects Project[]
+}
+
+// Projects ------------------------------------
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  apiKeys      ApiKey[]
+  eventTypes   EventType[]
+  subscribers  Subscriber[]
+  notification Notification[]
+}
+
+// API Keys ---------------------------------------------
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  projectId  String
+  prefix     String
+  hash       String
+  name       String?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([prefix])
+}
+
+// EventTypes -------------------------------------------
+
+model EventType {
+  id          String    @id @default(cuid())
+  projectId   String
+  slug        String
+  description String?
+  channels    Channel[]
+  createdAt   DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, slug])
+}
+
+// Subscribers --------------------------------------------------
+
+model Subscriber {
+  id         String   @id @default(cuid())
+  projectId  String
+  externalId String
+  email      String?
+  wehhookUrl String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project                Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  notificationPrefrences NotificationPrefrences[]
+  notifications          Notification[]
+
+  @@unique([projectId, externalId])
+}
+
+// Notification-Preferences --------------------------------
+
+model NotificationPrefrences {
+  id           String  @id @default(cuid())
+  subscriberId String
+  eventSlug    String
+  channel      Channel
+  enabled      Boolean @default(true)
+
+  subscriber Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, eventSlug, channel])
+}
+
+// Notification -------------------------------------
+model Notification {
+  id             String   @id @default(cuid())
+  projectId      String
+  subscriberId   String
+  eventSlug      String
+  payload        Json
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subscriber   Subscriber    @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  deliveryLogs DeliveryLog[]
+}
+
+// Delivery Logs ---------------------------------------
+
+model DeliveryLog {
+  id             String         @id @default(cuid())
+  notificationId String
+  channel        Channel
+  status         DeliveryStatus @default(PENDING)
+  attemptCount   Int            @default(0)
+  lastAttemptAt  DateTime?
+  failureReason  String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+}
+
+// ENUM -------------------------------------------
+
+enum Channel {
+  EMAIL
+  WEBHOOK
+  IN_APP
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  RETRYING
+}
