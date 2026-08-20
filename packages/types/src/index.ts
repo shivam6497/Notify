@@ -1,11 +1,23 @@
+// ============================================================================
+// Shared TypeScript Types & Interfaces (@notify/types)
+// Common domain models, BullMQ job payloads, API request schemas, and JWT types
+// shared across all microservices and packages in the monorepo.
+// ============================================================================
+
 // ─── Enums ────────────────────────────────────────────────
 
+/**
+ * Supported notification delivery channels.
+ */
 export enum Channel {
   EMAIL = "EMAIL",
   WEBHOOK = "WEBHOOK",
   IN_APP = "IN_APP",
 }
 
+/**
+ * Audit trail lifecycle status for delivery attempts.
+ */
 export enum DeliveryStatus {
   PENDING = "PENDING",
   DELIVERED = "DELIVERED",
@@ -13,7 +25,7 @@ export enum DeliveryStatus {
   RETRYING = "RETRYING",
 }
 
-// ─── API Request / Response Types ─────────────────────────
+// ─── API Request / Response Schemas ───────────────────────
 
 export interface TriggerNotificationBody {
   eventSlug: string;
@@ -72,7 +84,7 @@ export interface InAppJobPayload {
   projectId: string;
 }
 
-// ─── Auth ─────────────────────────────────────────────────
+// ─── Authentication & Session Types ───────────────────────
 
 export interface JwtPayload {
   userId: string;
