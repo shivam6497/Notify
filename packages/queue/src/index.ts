@@ -1,19 +1,41 @@
 import { Queue } from "bullmq";
-import IORedis from "ioredis"
+import IORedis from "ioredis";
 import type { EmailJobPayload, InAppJobPayload, WebhookJobPayload} from "@notify/types";
 
+// ============================================================================
+// Notification Queue Package
+// Centralized BullMQ queue initialization, Redis client factory, and retry policies.
+// ============================================================================
+
+/**
+ * Unique names for each notification channel queue.
+ */
 export const QUEUE_NAMES = {
     EMAIL: "email-delivery",
     WEBHOOK: "webhook-delivery",
     IN_APP: "inapp-delivery",
 } as const;
 
+/**
+ * Creates an IORedis client configured for BullMQ compatibility (`maxRetriesPerRequest: null`).
+ *
+ * @returns Initialized IORedis connection instance
+ */
 export function createRedisConnection(): IORedis {
     return new IORedis( process.env.REDIS_URL!, {
         maxRetriesPerRequest: null,
     });
 }
 
+/**
+ * Initializes and configures BullMQ queues with channel-specific retry and retention policies:
+ * - Email: 3 attempts with 5-second fixed backoff
+ * - Webhook: 5 attempts with exponential backoff (handles temporary recipient downtime)
+ * - In-App: 3 attempts with 1-second fixed backoff
+ *
+ * @param connection - Shared IORedis client connection
+ * @returns Object containing all initialized queues
+ */
 export function createQueues(connection: IORedis) {
     const emailQueues = new Queue<EmailJobPayload>( QUEUE_NAMES.EMAIL, {
         connection,
