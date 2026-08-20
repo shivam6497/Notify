@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -7,29 +8,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Auth --------------------------------
+// ============================================================================
+// Authentication & User Model
+// Represents dashboard administrators and developers owning projects.
+// ============================================================================
 
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String?
+  passwordHash String?  // Nullable for OAuth-only users
   name         String?
-  picture      String?
+  picture      String?  // Avatar image URL (from Google OAuth)
   googleId     String?  @unique
+  isVerified   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   projects Project[]
 }
 
-// Projects ------------------------------------
+// ============================================================================
+// Project Model
+// Isolated multi-tenant workspace holding API keys, subscribers, and notifications.
+// ============================================================================
 
 model Project {
-  id        String   @id @default(cuid())
-  name      String
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  userId        String
+  webhookSecret String?  // HMAC-SHA256 signing secret for webhook payloads (whsec_...)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -39,31 +48,37 @@ model Project {
   notification Notification[]
 }
 
-// API Keys ---------------------------------------------
+// ============================================================================
+// API Key Model
+// Used for authenticating developer API requests to /v1/* endpoints.
+// ============================================================================
 
 model ApiKey {
   id         String    @id @default(cuid())
   projectId  String
-  prefix     String
-  hash       String
-  name       String?
+  prefix     String    // Searchable identifier prefix (e.g. nk_live_abc12345)
+  hash       String    // Bcrypt hash of the full raw key
+  name       String?   // User-friendly label for the key
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
-  revokedAt  DateTime?
+  revokedAt  DateTime? // Timestamp when revoked (soft delete)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([prefix])
 }
 
-// EventTypes -------------------------------------------
+// ============================================================================
+// Event Type Model
+// Predefined notification topics/events and default delivery channels.
+// ============================================================================
 
 model EventType {
   id          String    @id @default(cuid())
   projectId   String
-  slug        String
+  slug        String    // Unique identifier within the project (e.g. "order-placed")
   description String?
-  channels    Channel[]
+  channels    Channel[] // Default delivery channels for this event
   createdAt   DateTime  @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -71,27 +86,33 @@ model EventType {
   @@unique([projectId, slug])
 }
 
-// Subscribers --------------------------------------------------
+// ============================================================================
+// Subscriber Model
+// End-user / recipient identity mapped to an externalId from client systems.
+// ============================================================================
 
 model Subscriber {
   id         String   @id @default(cuid())
   projectId  String
-  externalId String
+  externalId String   // Unique user identifier in the client system (e.g. user_123)
   email      String?
-  wehhookUrl String?
+  webhookUrl String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  project                Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  notificationPrefrences NotificationPrefrences[]
-  notifications          Notification[]
+  project                 Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  notificationPreferences NotificationPreferences[]
+  notifications           Notification[]
 
   @@unique([projectId, externalId])
 }
 
-// Notification-Preferences --------------------------------
+// ============================================================================
+// Notification Preferences Model
+// Subscriber-specific opt-in / opt-out override settings per event & channel.
+// ============================================================================
 
-model NotificationPrefrences {
+model NotificationPreferences {
   id           String  @id @default(cuid())
   subscriberId String
   eventSlug    String
@@ -103,13 +124,17 @@ model NotificationPrefrences {
   @@unique([subscriberId, eventSlug, channel])
 }
 
-// Notification -------------------------------------
+// ============================================================================
+// Notification Model
+// Record of an event triggered for a subscriber, including JSON payload.
+// ============================================================================
+
 model Notification {
   id             String   @id @default(cuid())
   projectId      String
   subscriberId   String
   eventSlug      String
-  payload        Json
+  payload        Json     // Arbitrary event payload data
   idempotencyKey String?  @unique
   createdAt      DateTime @default(now())
 
@@ -118,7 +143,10 @@ model Notification {
   deliveryLogs DeliveryLog[]
 }
 
-// Delivery Logs ---------------------------------------
+// ============================================================================
+// Delivery Log Model
+// Audit trail tracking delivery attempts, status, and failure reasons per channel.
+// ============================================================================
 
 model DeliveryLog {
   id             String         @id @default(cuid())
@@ -127,14 +155,16 @@ model DeliveryLog {
   status         DeliveryStatus @default(PENDING)
   attemptCount   Int            @default(0)
   lastAttemptAt  DateTime?
-  failureReason  String?
+  failureReason  String?        // Error details if delivery failed
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 }
 
-// ENUM -------------------------------------------
+// ============================================================================
+// Enums
+// ============================================================================
 
 enum Channel {
   EMAIL
