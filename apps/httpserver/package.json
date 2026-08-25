@@ -3,32 +3,35 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@notify/db": "workspace:*",
-    "@notify/types": "workspace:*",
     "@notify/queue": "workspace:*",
-    "express": "^4.19.0",
+    "@notify/types": "workspace:*",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "express": "^4.19.0",
     "helmet": "^7.1.0",
-    "zod": "^3.23.0",
     "ioredis": "^5.3.0",
-    "nanoid": "^3.3.7"
+    "jose": "^6.2.9",
+    "jsonwebtoken": "^9.0.0",
+    "nanoid": "^3.3.7",
+    "resend": "^3.2.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@notify/typescript-config": "workspace:*",
-    "@types/express": "^4.17.21",
     "@types/bcryptjs": "^2.4.6",
-    "@types/jsonwebtoken": "^9.0.6",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "dotenv-cli": "^7.4.4",
     "tsx": "^4.11.0",
     "typescript": "^5.4.0"
   }
