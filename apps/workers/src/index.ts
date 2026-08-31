@@ -16,34 +16,25 @@ const queues = createQueues(connection);
 // ─── Worker Instances & Concurrency Tuning ─────────────────
 
 // Email Worker (Concurrency 10: limited by Resend API rate limits)
-const emailWorker = new Worker(
-  QUEUE_NAMES.EMAIL,
-  emailProcessor,
-  {
-    connection,
-    concurrency: 10,
-  }
-);
+const emailWorker = new Worker(QUEUE_NAMES.EMAIL, emailProcessor, {
+  connection,
+  concurrency: 10,
+  drainDelay: 300000,
+});
 
 // Webhook Worker (Concurrency 20: HTTP POST requests with exponential backoff)
-const webhookWorker = new Worker(
-  QUEUE_NAMES.WEBHOOK,
-  webhookProcessor,
-  {
-    connection,
-    concurrency: 20,
-  }
-);
+const webhookWorker = new Worker(QUEUE_NAMES.WEBHOOK, webhookProcessor, {
+  connection,
+  concurrency: 20,
+  drainDelay: 300000,
+});
 
 // In-App Worker (Concurrency 50: lightweight Redis Pub/Sub writes)
-const inAppWorker = new Worker(
-  QUEUE_NAMES.IN_APP,
-  inAppProcessor,
-  {
-    connection,
-    concurrency: 50,
-  }
-);
+const inAppWorker = new Worker(QUEUE_NAMES.IN_APP, inAppProcessor, {
+  connection,
+  concurrency: 50,
+  drainDelay: 300000,
+});
 
 // ─── Lifecycle & Error Event Listeners ──────────────────────
 
