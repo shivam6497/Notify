@@ -37,7 +37,7 @@ jobs:
           pnpm turbo run build --filter=...[HEAD^1] --dry=json > turbo-out.json
           echo "httpserver=$(cat turbo-out.json | jq '[.tasks[].taskId] | any(contains("httpserver"))')" >> $GITHUB_OUTPUT
           echo "ws=$(cat turbo-out.json | jq '[.tasks[].taskId] | any(contains("ws#"))')" >> $GITHUB_OUTPUT
-          echo "worker=$(cat turbo-out.json | jq '[.tasks[].taskId] | any(contains("worker#"))')" >> $GITHUB_OUTPUT
+          echo "workers=$(cat turbo-out.json | jq '[.tasks[].taskId] | any(contains("workers#"))')" >> $GITHUB_OUTPUT
           echo "client=$(cat turbo-out.json | jq '[.tasks[].taskId] | any(contains("client#"))')" >> $GITHUB_OUTPUT
           echo "demo=$(cat turbo-out.json | jq '[.tasks[].taskId] | any(contains("demo#"))')" >> $GITHUB_OUTPUT
 
@@ -71,12 +71,12 @@ jobs:
           cache-to: type=gha,mode=max
 
       - uses: docker/build-push-action@v5
-        if: steps.changes.outputs.worker == 'true'
+        if: steps.changes.outputs.workers == 'true'
         with:
           context: .
-          file: ./apps/worker/Dockerfile
+          file: ./apps/workers/Dockerfile
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}-worker:latest
+          tags: ${{ env.IMAGE_PREFIX }}-workers:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -109,13 +109,13 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: CHANGED_HTTPSERVER=${{ steps.changes.outputs.httpserver }},CHANGED_WS=${{ steps.changes.outputs.ws }},CHANGED_WORKER=${{ steps.changes.outputs.worker }},CHANGED_CLIENT=${{ steps.changes.outputs.client }},CHANGED_DEMO=${{ steps.changes.outputs.demo }},IMAGE_PREFIX=${{ env.IMAGE_PREFIX }}
+          envs: CHANGED_HTTPSERVER=${{ steps.changes.outputs.httpserver }},CHANGED_WS=${{ steps.changes.outputs.ws }},CHANGED_workers=${{ steps.changes.outputs.workers }},CHANGED_CLIENT=${{ steps.changes.outputs.client }},CHANGED_DEMO=${{ steps.changes.outputs.demo }},IMAGE_PREFIX=${{ env.IMAGE_PREFIX }}
           script: |
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             [ "$CHANGED_HTTPSERVER" == "true" ] && docker pull $IMAGE_PREFIX-httpserver:latest && docker compose up -d --no-deps httpserver
             [ "$CHANGED_WS" == "true" ] && docker pull $IMAGE_PREFIX-ws:latest && docker compose up -d --no-deps ws
-            [ "$CHANGED_WORKER" == "true" ] && docker pull $IMAGE_PREFIX-worker:latest && docker compose up -d --no-deps worker
+            [ "$CHANGED_workers" == "true" ] && docker pull $IMAGE_PREFIX-workers:latest && docker compose up -d --no-deps workers
             [ "$CHANGED_CLIENT" == "true" ] && docker pull $IMAGE_PREFIX-client:latest && docker compose up -d --no-deps client
             [ "$CHANGED_DEMO" == "true" ] && docker pull $IMAGE_PREFIX-demo:latest && docker compose up -d --no-deps demo
             
