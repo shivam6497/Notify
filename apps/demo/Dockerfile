@@ -1,6 +1,6 @@
 FROM node:20-slim AS base
-RUN apk add --no-cache openssl libc6-compat
-RUN npm install -g turbo pnpm 
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN npm install -g turbo pnpm@9
 
 FROM base AS pruner
 WORKDIR /app
