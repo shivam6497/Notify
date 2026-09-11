@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShopZap — Notify Demo</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg-2: #111;
+      --bg-3: #161616;
+      --border: #1f1f1f;
+      --border-2: #2a2a2a;
+      --text: #e8e8e8;
+      --text-2: #888;
+      --text-3: #555;
+      --accent: #fff;
+      --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+      --blue-dim: rgba(59,130,246,0.10);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+    /* Layout */
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Header */
+    .header {
+      height: 48px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 22px; height: 22px;
+      background: var(--accent);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo span { color: #000; font-weight: 700; font-size: 11px; }
+    .brand { font-size: 13px; font-weight: 500; color: var(--text); }
+    .divider-v { width: 1px; height: 16px; background: var(--border-2); }
+    .brand-sub { font-size: 12px; color: var(--text-3); }
+
+    .header-right { display: flex; align-items: center; gap: 8px; }
+
+    /* Status badge */
+    .ws-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 10px;
+      border: 1px solid var(--border-2);
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: 'Geist Mono', monospace;
+      color: var(--text-3);
+    }
+    .ws-badge.connected { border-color: rgba(34,197,94,0.3); color: var(--green); }
+    .ws-badge.disconnected { border-color: rgba(239,68,68,0.3); color: var(--red); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .dot.pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px;
+      border-radius: 5px;
+      border: 1px solid var(--border-2);
+      background: var(--bg-3);
+      color: var(--text-2);
+      cursor: pointer;
+      font-family: 'Geist', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      transition: color 0.1s, border-color 0.1s, background 0.1s;
+      white-space: nowrap;
+    }
+    .btn:hover { color: var(--text); border-color: var(--border-2); background: #1c1c1c; }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: #e8e8e8; color: #000; border-color: #e8e8e8; }
+    .btn-sm { padding: 4px 8px; font-size: 11px; }
+    .btn-icon {
+      width: 30px; height: 30px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+
+    /* Bell */
+    .bell-badge {
+      position: absolute; top: -3px; right: -3px;
+      min-width: 15px; height: 15px; padding: 0 3px;
+      background: var(--blue);
+      border-radius: 99px;
+      font-size: 9px; font-weight: 700; font-family: 'Geist Mono', monospace;
+      color: #fff;
+      display: none;
+      align-items: center; justify-content: center;
+      border: 1.5px solid var(--bg);
+    }
+    .bell-badge.visible { display: flex; }
+
+    @keyframes ring {
+      0%, 100% { transform: rotate(0deg); }
+      20% { transform: rotate(12deg); }
+      40% { transform: rotate(-12deg); }
+      60% { transform: rotate(7deg); }
+      80% { transform: rotate(-5deg); }
+    }
+    .ringing { animation: ring 0.5s ease; }
+
+    /* Notification dropdown */
+    .notif-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0;
+      width: 320px;
+      background: var(--bg-2);
+      border: 1px solid var(--border-2);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      overflow: hidden;
+      display: none;
+      z-index: 200;
+    }
+    .notif-dropdown.open { display: block; }
+    .notif-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; font-weight: 500;
+    }
+    .notif-count {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      color: var(--text-3);
+      background: var(--bg-3);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .notif-list { max-height: 280px; overflow-y: auto; }
+    .notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-slug { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--text); font-weight: 500; }
+    .notif-body { font-size: 11px; color: var(--text-3); margin-top: 2px; word-break: break-all; }
+    .notif-empty { padding: 28px 14px; text-align: center; color: var(--text-3); font-size: 12px; }
+
+    /* Toast */
+    #toastContainer { position: fixed; top: 56px; right: 16px; z-index: 999; display: flex; flex-direction: column; gap: 8px; width: 300px; pointer-events: none; }
+    .toast {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 11px 13px;
+      background: var(--bg-2);
+      border: 1px solid var(--border-2);
+      border-radius: 7px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      pointer-events: all;
+      animation: slideIn 0.25s ease forwards;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .toast-icon { color: var(--blue); margin-top: 1px; flex-shrink: 0; }
+    .toast-slug { font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; color: var(--text); }
+    .toast-body { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+    .toast-time { font-family: 'Geist Mono', monospace; font-size: 10px; color: var(--text-3); margin-left: auto; flex-shrink: 0; }
+    .toast-close { color: var(--text-3); cursor: pointer; background: none; border: none; padding: 0; flex-shrink: 0; }
+    .toast-close:hover { color: var(--text); }
+
+    /* Setup banner */
+    .setup-banner {
+      margin: 16px 20px;
+      padding: 12px 14px;
+      background: rgba(245,158,11,0.06);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      font-size: 12px;
+    }
+    .setup-banner p { color: #d4a72c; }
+    .setup-banner p span { display: block; font-size: 11px; color: rgba(212,167,44,0.6); margin-top: 1px; }
+
+    /* Main layout */
+    .main {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      flex: 1;
+      overflow: hidden;
+      height: calc(100vh - 48px);
+    }
+    @media (max-width: 768px) {
+      .main { grid-template-columns: 1fr; height: auto; overflow: visible; }
+    }
+
+    /* Sidebar */
+    .sidebar {
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+
+    /* Section */
+    .section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .section-label {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-3);
+      margin-bottom: 12px;
+    }
+
+    /* Subscriber row */
+    .subscriber-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px;
+    }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 6px;
+      background: var(--bg-3);
+      border: 1px solid var(--border-2);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 13px; color: var(--text);
+      flex-shrink: 0;
+    }
+    .subscriber-name { font-size: 12px; font-weight: 500; color: var(--text); }
+    .subscriber-email { font-size: 11px; color: var(--text-3); font-family: 'Geist Mono', monospace; }
+    .subscriber-status {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(34,197,94,0.2);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .row-btns { display: flex; gap: 6px; }
+
+    /* Trigger cards */
+    .trigger-card {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .trigger-card:last-child { margin-bottom: 0; }
+    .trigger-card-top {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 13px;
+    }
+    .trigger-icon {
+      width: 28px; height: 28px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .trigger-icon.purple { background: rgba(139,92,246,0.12); color: #a78bfa; }
+    .trigger-icon.green { background: rgba(34,197,94,0.10); color: #4ade80; }
+    .trigger-icon.red { background: rgba(239,68,68,0.10); color: #f87171; }
+    .trigger-meta { flex: 1; min-width: 0; }
+    .trigger-title { font-size: 12px; font-weight: 500; color: var(--text); }
+    .trigger-desc { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+    .trigger-slug {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; color: var(--text-3);
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      padding: 2px 6px; border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .trigger-btn {
+      width: 100%;
+      padding: 7px;
+      border: none; border-top: 1px solid var(--border);
+      background: var(--bg-3);
+      color: var(--text-2);
+      font-family: 'Geist', sans-serif;
+      font-size: 11px; font-weight: 500;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: background 0.1s, color 0.1s;
+    }
+    .trigger-btn:hover { background: #1a1a1a; color: var(--text); }
+    .trigger-btn.primary-btn { color: #8b5cf6; }
+    .trigger-btn.primary-btn:hover { color: #a78bfa; }
+
+    /* Custom event */
+    .custom-section { padding: 14px; }
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    .custom-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; font-weight: 500; color: var(--text-3);
+      padding: 4px 0;
+    }
+    .custom-toggle:hover { color: var(--text-2); }
+    .custom-fields { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+    /* Form */
+    label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
+    input, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border-2);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.1s;
+      resize: none;
+    }
+    input:focus, textarea:focus { border-color: #444; }
+    input::placeholder { color: var(--text-3); }
+
+    /* Right panel */
+    .panel {
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex; align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      height: 40px;
+      gap: 2px;
+    }
+    .tab {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px; font-weight: 500;
+      cursor: pointer;
+      color: var(--text-3);
+      border: none; background: none;
+      font-family: 'Geist', sans-serif;
+      transition: color 0.1s, background 0.1s;
+    }
+    .tab:hover { color: var(--text-2); background: var(--bg-3); }
+    .tab.active { color: var(--text); background: var(--bg-3); }
+    .tab-count {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; color: var(--text-3);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 0 4px; border-radius: 3px;
+    }
+    .tab.active .tab-count { color: var(--text-2); }
+    .tab-actions { margin-left: auto; }
+
+    /* Stream area */
+    .stream {
+      flex: 1; overflow-y: auto;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .stream-panel { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .stream-panel.hidden { display: none; }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 20px;
+      color: var(--text-3); text-align: center;
+      gap: 8px;
+    }
+    .empty-state svg { opacity: 0.3; }
+    .empty-state-title { font-size: 13px; color: var(--text-2); font-weight: 500; }
+    .empty-state-code {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 4px;
+      color: var(--blue);
+    }
+    .empty-state p { font-size: 11px; max-width: 280px; }
+
+    /* Log entries */
+    .log-entry {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      animation: fadeSlide 0.2s ease forwards;
+    }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .log-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+    .log-header-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .log-method { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--blue); font-weight: 600; }
+    .log-event-slug {
+      font-family: 'Geist Mono', monospace; font-size: 11px;
+      color: var(--text); font-weight: 500;
+      background: var(--bg-3); border: 1px solid var(--border);
+      padding: 1px 6px; border-radius: 3px;
+    }
+    .log-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .sig-badge {
+      font-size: 10px; font-weight: 600;
+      padding: 2px 7px; border-radius: 3px;
+    }
+    .sig-valid { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+    .sig-invalid { background: rgba(245,158,11,0.08); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+    .log-time { font-family: 'Geist Mono', monospace; font-size: 10px; color: var(--text-3); }
+
+    .log-body { padding: 10px 12px; background: var(--bg); }
+    .log-field-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 11px; flex-wrap: wrap; }
+    .log-field-key { font-family: 'Geist Mono', monospace; color: var(--text-3); flex-shrink: 0; }
+    .log-field-val { font-family: 'Geist Mono', monospace; color: var(--text-2); word-break: break-all; }
+    pre.log-pre {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: #86efac;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      overflow-x: auto;
+      margin-top: 6px;
+      line-height: 1.55;
+    }
+
+    .ws-entry { padding: 10px 12px; background: var(--bg-2); }
+    .ws-label { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--green); font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 500;
+      display: none;
+      align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-2);
+      border: 1px solid var(--border-2);
+      border-radius: 10px;
+      width: 100%; max-width: 460px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .modal-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-footer {
+      display: flex; justify-content: flex-end; gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Prefs */
+    .pref-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 12px;
+      font-family: 'Geist Mono', monospace;
+      color: var(--text-2);
+    }
+    input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--blue); cursor: pointer; }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0;
+    }
+    .stat {
+      flex: 1; padding: 12px 16px;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); margin-bottom: 4px; }
+    .stat-val { font-family: 'Geist Mono', monospace; font-size: 18px; font-weight: 500; color: var(--text); }
+    .stat-val.green { color: var(--green); }
+    .stat-val.blue { color: var(--blue); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo"><span>S</span></div>
+        <span class="brand">ShopZap</span>
+        <div class="divider-v"></div>
+        <span class="brand-sub">Notify Platform · Demo Consumer</span>
+      </div>
+
+      <div class="header-right">
+        <div id="wsStatusBadge" class="ws-badge" style="display:none;">
+          <span class="dot pulse" id="wsDot"></span>
+          <span id="wsStatusText">Connecting...</span>
+        </div>
+        <button class="btn btn-sm" onclick="toggleConfigModal(true)">
+          <i data-lucide="settings" style="width:12px;height:12px;"></i>
+          Configure
+        </button>
+        <div style="position:relative;">
+          <button class="btn btn-icon btn-sm" id="bellBtn" onclick="toggleDropdown()">
+            <i data-lucide="bell" id="bellIcon" style="width:14px;height:14px;"></i>
+            <span id="bellBadge" class="bell-badge">0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown">
+            <div class="notif-header">
+              <span>In-App Notifications</span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="notif-count" id="notifCount">0</span>
+                <button class="btn btn-sm" onclick="clearNotifications()" style="padding:2px 6px;font-size:10px;">Clear</button>
+              </div>
+            </div>
+            <div class="notif-list" id="notifList">
+              <div class="notif-empty">No notifications yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div id="toastContainer"></div>
+
+    <!-- Setup banner -->
+    <div id="setupBanner" class="setup-banner">
+      <p>
+        Configure your Notify credentials to start testing
+        <span>Enter your Project ID, API Key, and Webhook Secret</span>
+      </p>
+      <button class="btn btn-sm" onclick="toggleConfigModal(true)">Setup →</button>
+    </div>
+
+    <!-- Main layout -->
+    <div class="main">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+
+        <!-- Subscriber -->
+        <div class="section">
+          <div class="section-label">Active Subscriber</div>
+          <div class="subscriber-row">
+            <div class="avatar" id="subAvatar">A</div>
+            <div>
+              <div class="subscriber-name" id="subId">customer_alex_1</div>
+              <div class="subscriber-email" id="subEmail">alex@example.com</div>
+            </div>
+            <div class="subscriber-status">active</div>
+          </div>
+          <div class="row-btns">
+            <button class="btn btn-sm" id="syncBtn" onclick="syncSubscriber()" style="flex:1;">
+              <i data-lucide="refresh-cw" style="width:11px;height:11px;"></i>
+              Sync to Notify
+            </button>
+            <button class="btn btn-sm" onclick="togglePrefsModal(true)">
+              <i data-lucide="sliders-horizontal" style="width:11px;height:11px;"></i>
+              Prefs
+            </button>
+          </div>
+        </div>
+
+        <!-- Triggers -->
+        <div class="section" style="flex:1;">
+          <div class="section-label">Trigger Events</div>
+
+          <!-- Order Placed -->
+          <div class="trigger-card">
+            <div class="trigger-card-top">
+              <div class="trigger-icon purple">
+                <i data-lucide="shopping-bag" style="width:14px;height:14px;"></i>
+              </div>
+              <div class="trigger-meta">
+                <div class="trigger-title">Mechanical Keyboard</div>
+                <div class="trigger-desc">$129.00 · checkout complete</div>
+              </div>
+              <span class="trigger-slug">order.placed</span>
+            </div>
+            <button class="trigger-btn primary-btn" onclick="triggerSampleEvent('order.placed', { orderId: '#ORD-' + Math.floor(1000 + Math.random() * 9000), item: 'Custom Mechanical Keyboard', amount: '$129.00', date: new Date().toLocaleDateString() })">
+              <i data-lucide="send" style="width:11px;height:11px;"></i>
+              Trigger event
+            </button>
+          </div>
+
+          <!-- Item Shipped -->
+          <div class="trigger-card">
+            <div class="trigger-card-top">
+              <div class="trigger-icon green">
+                <i data-lucide="truck" style="width:14px;height:14px;"></i>
+              </div>
+              <div class="trigger-meta">
+                <div class="trigger-title">Shipment Dispatched</div>
+                <div class="trigger-desc">FedEx Express · in transit</div>
+              </div>
+              <span class="trigger-slug">item.shipped</span>
+            </div>
+            <button class="trigger-btn" onclick="triggerSampleEvent('item.shipped', { trackingNumber: 'NZ-' + Math.floor(100000 + Math.random() * 900000), carrier: 'FedEx Express', estimatedDelivery: '2 business days' })">
+              <i data-lucide="send" style="width:11px;height:11px;"></i>
+              Trigger event
+            </button>
+          </div>
+
+          <!-- Security Alert -->
+          <div class="trigger-card">
+            <div class="trigger-card-top">
+              <div class="trigger-icon red">
+                <i data-lucide="shield-alert" style="width:14px;height:14px;"></i>
+              </div>
+              <div class="trigger-meta">
+                <div class="trigger-title">Security Alert</div>
+                <div class="trigger-desc">Login from 198.51.100.42 · London</div>
+              </div>
+              <span class="trigger-slug">security.alert</span>
+            </div>
+            <button class="trigger-btn" onclick="triggerSampleEvent('security.alert', { ipAddress: '198.51.100.42', location: 'London, UK', device: 'Chrome on macOS' })">
+              <i data-lucide="send" style="width:11px;height:11px;"></i>
+              Trigger event
+            </button>
+          </div>
+
+          <!-- Custom event -->
+          <div class="section" style="padding: 12px 0 0; border-bottom: none;">
+            <details>
+              <summary>
+                <div class="custom-toggle">
+                  <span>Custom event</span>
+                  <i data-lucide="chevron-down" style="width:12px;height:12px;"></i>
+                </div>
+              </summary>
+              <div class="custom-fields">
+                <div>
+                  <label>Event slug</label>
+                  <input type="text" id="customSlug" value="order.placed" />
+                </div>
+                <div>
+                  <label>JSON payload</label>
+                  <textarea id="customPayload" rows="3">{"message": "Hello from custom event!"}</textarea>
+                </div>
+                <button class="btn" onclick="triggerCustomEvent()" style="width:100%;justify-content:center;">Dispatch</button>
+              </div>
+            </details>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right panel: Live streams -->
+      <div class="panel">
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat">
+            <div class="stat-label">In-App received</div>
+            <div class="stat-val green" id="statInApp">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Webhooks received</div>
+            <div class="stat-val blue" id="statWebhook">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Webhook endpoint</div>
+            <div class="stat-val" style="font-size:11px;font-family:'Geist Mono',monospace;color:var(--text-3);margin-top:4px;">demo:4000/webhook</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" id="tabWebhook" onclick="switchTab('webhook')">
+            <i data-lucide="webhook" style="width:13px;height:13px;"></i>
+            Webhook stream
+            <span class="tab-count" id="webhookCount">0</span>
+          </button>
+          <button class="tab" id="tabInapp" onclick="switchTab('inapp')">
+            <i data-lucide="radio" style="width:13px;height:13px;"></i>
+            WebSocket feed
+            <span class="tab-count" id="inappCount">0</span>
+          </button>
+          <div class="tab-actions">
+            <button class="btn btn-sm" onclick="clearStream()">Clear</button>
+          </div>
+        </div>
+
+        <!-- Stream content -->
+        <div class="stream" id="streamArea">
+          <!-- Webhook panel -->
+          <div class="stream-panel" id="webhookPanel">
+            <div class="empty-state" id="emptyWebhook">
+              <i data-lucide="radio-tower" style="width:28px;height:28px;"></i>
+              <p class="empty-state-title">Listening for webhooks</p>
+              <span class="empty-state-code">http://demo:4000/webhook</span>
+              <p>Webhook payloads from the Notify worker will stream here with live HMAC verification</p>
+            </div>
+          </div>
+
+          <!-- In-App panel (hidden) -->
+          <div class="stream-panel hidden" id="inappPanel">
+            <div class="empty-state" id="emptyInapp">
+              <i data-lucide="sparkles" style="width:28px;height:28px;"></i>
+              <p class="empty-state-title">WebSocket connected</p>
+              <span class="empty-state-code" id="wsRoom">project:subscriber</span>
+              <p>In-app notifications from Socket.IO will appear here in real time</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Modal -->
+  <div class="modal-overlay" id="configModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Notify credentials</span>
+        <button class="btn btn-icon btn-sm" onclick="toggleConfigModal(false)">
+          <i data-lucide="x" style="width:14px;height:14px;"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <label>Project ID</label>
+          <input id="inputProjectId" placeholder="cm7..." />
+        </div>
+        <div>
+          <label>API Key</label>
+          <input id="inputApiKey" type="password" placeholder="nk_live_..." />
+        </div>
+        <div>
+          <label>Webhook Secret (for HMAC verification)</label>
+          <input id="inputWebhookSecret" type="password" placeholder="whsec_..." />
+        </div>
+        <div class="field-grid">
+          <div>
+            <label>Subscriber ID</label>
+            <input id="inputExternalId" value="customer_alex_1" />
+          </div>
+          <div>
+            <label>Email</label>
+            <input id="inputEmail" type="email" value="alex@example.com" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="toggleConfigModal(false)">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCredentials()">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prefs Modal -->
+  <div class="modal-overlay" id="prefsModal">
+    <div class="modal" style="max-width:380px;">
+      <div class="modal-header">
+        <span class="modal-title">Channel preferences</span>
+        <button class="btn btn-icon btn-sm" onclick="togglePrefsModal(false)">
+          <i data-lucide="x" style="width:14px;height:14px;"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:11px;color:var(--text-3);">Managing preferences for <code id="prefSubLabel" style="color:var(--text-2);">customer_alex_1</code></p>
+        <div class="pref-row">
+          <span>order.placed — In-App</span>
+          <input type="checkbox" id="pref_order_inapp" checked />
+        </div>
+        <div class="pref-row">
+          <span>order.placed — Webhook</span>
+          <input type="checkbox" id="pref_order_webhook" checked />
+        </div>
+        <div class="pref-row">
+          <span>order.placed — Email</span>
+          <input type="checkbox" id="pref_order_email" checked />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="togglePrefsModal(false)">Cancel</button>
+        <button class="btn btn-primary" onclick="savePreferences()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let socket = null;
+    let socketNotifications = [];
+    let webhookCount = 0;
+    let inappCount = 0;
+    let currentTab = 'webhook';
+
+    let config = {
+      projectId: localStorage.getItem('nz_projectId') || '',
+      apiKey: localStorage.getItem('nz_apiKey') || '',
+      webhookSecret: localStorage.getItem('nz_webhookSecret') || '',
+      externalId: localStorage.getItem('nz_externalId') || 'customer_alex_1',
+      email: localStorage.getItem('nz_email') || 'alex@example.com',
+    };
+
+    // Chime
+    function chime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(660, ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+        g.gain.setValueAtTime(0.12, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.3);
+      } catch(e){}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      applyConfig();
+      initSSE();
+      connectSocket();
+    });
+
+    function applyConfig() {
+      document.getElementById('inputProjectId').value = config.projectId;
+      document.getElementById('inputApiKey').value = config.apiKey;
+      document.getElementById('inputWebhookSecret').value = config.webhookSecret;
+      document.getElementById('inputExternalId').value = config.externalId;
+      document.getElementById('inputEmail').value = config.email;
+
+      document.getElementById('subId').textContent = config.externalId || 'Not set';
+      document.getElementById('subEmail').textContent = config.email || '—';
+      document.getElementById('subAvatar').textContent = (config.externalId?.[0] || 'U').toUpperCase();
+      document.getElementById('wsRoom').textContent = `${config.projectId || 'project'}:${config.externalId || 'subscriber'}`;
+
+      const banner = document.getElementById('setupBanner');
+      if (config.projectId && config.apiKey) banner.style.display = 'none';
+      else banner.style.display = 'flex';
+    }
+
+    function saveCredentials() {
+      config.projectId = document.getElementById('inputProjectId').value.trim();
+      config.apiKey = document.getElementById('inputApiKey').value.trim();
+      config.webhookSecret = document.getElementById('inputWebhookSecret').value.trim();
+      config.externalId = document.getElementById('inputExternalId').value.trim();
+      config.email = document.getElementById('inputEmail').value.trim();
+
+      localStorage.setItem('nz_projectId', config.projectId);
+      localStorage.setItem('nz_apiKey', config.apiKey);
+      localStorage.setItem('nz_webhookSecret', config.webhookSecret);
+      localStorage.setItem('nz_externalId', config.externalId);
+      localStorage.setItem('nz_email', config.email);
+
+      fetch('/api/config/secret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: config.webhookSecret })
+      });
+
+      applyConfig();
+      toggleConfigModal(false);
+      connectSocket();
+      syncSubscriber();
+    }
+
+    // Socket.IO
+    function connectSocket() {
+      if (!config.projectId || !config.externalId) return;
+      if (socket) socket.disconnect();
+
+      const badge = document.getElementById('wsStatusBadge');
+      const statusText = document.getElementById('wsStatusText');
+      const dot = document.getElementById('wsDot');
+      badge.style.display = 'flex';
+
+      socket = io('http://localhost:3002', {
+        auth: { projectId: config.projectId, externalId: config.externalId },
+        transports: ['websocket', 'polling'],
+      });
+
+      socket.on('connect', () => {
+        statusText.textContent = 'ws:3002';
+        badge.className = 'ws-badge connected';
+        dot.className = 'dot';
+      });
+      socket.on('disconnect', () => {
+        statusText.textContent = 'disconnected';
+        badge.className = 'ws-badge disconnected';
+        dot.className = 'dot pulse';
+      });
+      socket.on('notification', n => handleNotif(n, true));
+      socket.on('unread', items => { if(Array.isArray(items)) items.forEach(i => handleNotif(i, false)); });
+    }
+
+    function handleNotif(notif, showToast) {
+      socketNotifications.unshift(notif);
+      inappCount++;
+      document.getElementById('inappCount').textContent = inappCount;
+      document.getElementById('statInApp').textContent = inappCount;
+      document.getElementById('notifCount').textContent = socketNotifications.length;
+
+      const badge = document.getElementById('bellBadge');
+      badge.textContent = socketNotifications.length > 9 ? '9+' : socketNotifications.length;
+      badge.classList.add('visible');
+
+      renderNotifList();
+      appendInapp(notif);
+
+      if (showToast) {
+        chime();
+        ringBell();
+        showToast_(notif);
+      }
+    }
+
+    function ringBell() {
+      const el = document.getElementById('bellIcon');
+      el.classList.remove('ringing');
+      void el.offsetWidth;
+      el.classList.add('ringing');
+    }
+
+    function showToast_(notif) {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      const payloadStr = typeof notif.payload === 'object' ? JSON.stringify(notif.payload) : notif.payload;
+      t.innerHTML = `
+        <div class="toast-icon"><i data-lucide="bell" style="width:14px;height:14px;"></i></div>
+        <div style="flex:1;min-width:0;">
+          <div class="toast-slug">${notif.eventSlug || 'notification'}</div>
+          <div class="toast-body">${payloadStr}</div>
+        </div>
+        <span class="toast-time">${new Date().toLocaleTimeString()}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:12px;height:12px;"></i></button>
+      `;
+      c.appendChild(t);
+      lucide.createIcons();
+      setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(12px)'; t.style.transition='all 0.25s ease'; setTimeout(()=>t.remove(), 260); }, 5000);
+    }
+
+    // SSE
+    function initSSE() {
+      const es = new EventSource('/api/webhook-stream');
+      es.onmessage = e => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.type === 'WEBHOOK_HISTORY' && Array.isArray(d.history)) {
+            // Render past webhook backlog (oldest to newest so prepend puts latest at top)
+            const list = [...d.history].reverse();
+            webhookCount = list.length;
+            document.getElementById('webhookCount').textContent = webhookCount;
+            document.getElementById('statWebhook').textContent = webhookCount;
+            list.forEach(item => appendWebhook(item));
+          } else if (d.type === 'WEBHOOK_RECEIVED') {
+            webhookCount++;
+            document.getElementById('webhookCount').textContent = webhookCount;
+            document.getElementById('statWebhook').textContent = webhookCount;
+            appendWebhook(d);
+          }
+        } catch (err) {
+          console.error("SSE parse error", err);
+        }
+      };
+    }
+
+    function appendWebhook(log) {
+      const panel = document.getElementById('webhookPanel');
+      const empty = document.getElementById('emptyWebhook');
+      if (empty) empty.remove();
+
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+
+      const sigBadge = log.verified
+        ? `<span class="sig-badge sig-valid">HMAC valid ✓</span>`
+        : `<span class="sig-badge sig-invalid">Unverified ⚠</span>`;
+
+      entry.innerHTML = `
+        <div class="log-header">
+          <div class="log-header-left">
+            <span class="log-method">POST</span>
+            <span class="log-event-slug">${log.eventSlug}</span>
+          </div>
+          <div class="log-header-right">
+            ${sigBadge}
+            <span class="log-time">${new Date(log.timestamp).toLocaleTimeString()}</span>
+          </div>
+        </div>
+        <div class="log-body">
+          <div class="log-field-row">
+            <span class="log-field-key">X-Notify-Signature</span>
+            <span class="log-field-val" style="word-break:break-all;color:${log.verified?'#86efac':'#fbbf24'};">${log.providedSignature || 'none'}</span>
+          </div>
+          <pre class="log-pre">${JSON.stringify(log.payload, null, 2)}</pre>
+        </div>
+      `;
+      panel.prepend(entry);
+    }
+
+    function appendInapp(notif) {
+      const panel = document.getElementById('inappPanel');
+      const empty = document.getElementById('emptyInapp');
+      if (empty) empty.remove();
+
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ws-entry';
+      entry.innerHTML = `
+        <div class="ws-label">
+          <span>socket event: ${notif.eventSlug || 'notification'}</span>
+          <span style="color:var(--text-3);font-size:10px;">${new Date().toLocaleTimeString()}</span>
+        </div>
+        <pre class="log-pre" style="margin:0;">${JSON.stringify(notif, null, 2)}</pre>
+      `;
+      panel.prepend(entry);
+    }
+
+    function renderNotifList() {
+      const list = document.getElementById('notifList');
+      if (socketNotifications.length === 0) {
+        list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+        return;
+      }
+      list.innerHTML = socketNotifications.map(n => `
+        <div class="notif-item">
+          <div class="notif-slug">${n.eventSlug}</div>
+          <div class="notif-body">${typeof n.payload === 'object' ? JSON.stringify(n.payload) : n.payload}</div>
+        </div>
+      `).join('');
+    }
+
+    // API calls
+    async function triggerSampleEvent(slug, payload) {
+      if (!config.apiKey) { toggleConfigModal(true); return; }
+      try {
+        const res = await fetch('/api/proxy/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+          body: JSON.stringify({
+            eventSlug: slug,
+            subscriberId: config.externalId,
+            payload,
+            idempotencyKey: 'demo_' + Date.now() + '_' + Math.random().toString(36).substring(7),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+      } catch(err) { alert('Error: ' + err.message); }
+    }
+
+    async function triggerCustomEvent() {
+      const slug = document.getElementById('customSlug').value.trim();
+      let payload = {};
+      try { payload = JSON.parse(document.getElementById('customPayload').value); }
+      catch { alert('Invalid JSON'); return; }
+      await triggerSampleEvent(slug, payload);
+    }
+
+    async function syncSubscriber() {
+      if (!config.apiKey) return;
+      const btn = document.getElementById('syncBtn');
+      btn.textContent = 'Syncing...';
+      try {
+        const res = await fetch('/api/proxy/subscribers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+          body: JSON.stringify({ externalId: config.externalId, email: config.email, webhookUrl: 'http://demo:4000/webhook' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        btn.textContent = 'Synced ✓';
+        setTimeout(() => { btn.innerHTML = '<i data-lucide="refresh-cw" style="width:11px;height:11px;"></i> Sync to Notify'; lucide.createIcons(); }, 2000);
+      } catch(err) {
+        alert('Sync failed: ' + err.message);
+        btn.innerHTML = '<i data-lucide="refresh-cw" style="width:11px;height:11px;"></i> Sync to Notify';
+        lucide.createIcons();
+      }
+    }
+
+    async function savePreferences() {
+      if (!config.apiKey) return;
+      const prefs = [
+        { eventSlug: 'order.placed', channel: 'IN_APP', enabled: document.getElementById('pref_order_inapp').checked },
+        { eventSlug: 'order.placed', channel: 'WEBHOOK', enabled: document.getElementById('pref_order_webhook').checked },
+        { eventSlug: 'order.placed', channel: 'EMAIL', enabled: document.getElementById('pref_order_email').checked },
+      ];
+      await fetch(`/api/proxy/subscribers/${config.externalId}/preferences`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+        body: JSON.stringify({ preferences: prefs }),
+      });
+      togglePrefsModal(false);
+    }
+
+    // UI helpers
+    function toggleConfigModal(show) { document.getElementById('configModal').classList.toggle('open', show); }
+    function togglePrefsModal(show) {
+      document.getElementById('prefsModal').classList.toggle('open', show);
+      document.getElementById('prefSubLabel').textContent = config.externalId;
+    }
+
+    function toggleDropdown() {
+      document.getElementById('notifDropdown').classList.toggle('open');
+    }
+    document.addEventListener('click', e => {
+      const btn = document.getElementById('bellBtn');
+      const dropdown = document.getElementById('notifDropdown');
+      if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    function clearNotifications() {
+      socketNotifications = [];
+      document.getElementById('bellBadge').classList.remove('visible');
+      document.getElementById('notifCount').textContent = '0';
+      renderNotifList();
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('webhookPanel').classList.toggle('hidden', tab !== 'webhook');
+      document.getElementById('inappPanel').classList.toggle('hidden', tab !== 'inapp');
+      document.getElementById('tabWebhook').classList.toggle('active', tab === 'webhook');
+      document.getElementById('tabInapp').classList.toggle('active', tab === 'inapp');
+    }
+
+    function clearStream() {
+      fetch('/api/webhook-history', { method: 'DELETE' }).catch(() => {});
+      const wPanel = document.getElementById('webhookPanel');
+      const iPanel = document.getElementById('inappPanel');
+      wPanel.innerHTML = `<div class="empty-state" id="emptyWebhook"><i data-lucide="radio-tower" style="width:28px;height:28px;"></i><p class="empty-state-title">Stream cleared</p></div>`;
+      iPanel.innerHTML = `<div class="empty-state" id="emptyInapp"><i data-lucide="sparkles" style="width:28px;height:28px;"></i><p class="empty-state-title">Stream cleared</p></div>`;
+      webhookCount = 0; inappCount = 0;
+      document.getElementById('webhookCount').textContent = '0';
+      document.getElementById('inappCount').textContent = '0';
+      document.getElementById('statWebhook').textContent = '0';
+      document.getElementById('statInApp').textContent = '0';
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
