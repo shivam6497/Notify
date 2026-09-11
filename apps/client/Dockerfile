@@ -1,6 +1,6 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 RUN apk add --no-cache openssl libc6-compat
-RUN npm install -g turbo pnpm@8
+RUN npm install -g turbo pnpm
 
 FROM base AS pruner
 WORKDIR /app
