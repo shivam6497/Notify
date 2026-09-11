@@ -1,0 +1,173 @@
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    networks:
+      - app_network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks:
+      - app_network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/httpserver/Dockerfile
+    networks:
+      - app_network
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    command:
+      [
+        "npx",
+        "prisma@5.14.0",
+        "migrate",
+        "deploy",
+        "--schema",
+        "./packages/db/prisma/schema.prisma",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  httpserver:
+    build:
+      context: .
+      dockerfile: apps/httpserver/Dockerfile
+    restart: always
+    networks:
+      - app_network
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_EMAIL: ${RESEND_EMAIL}
+      CLIENT_URL: http://localhost:3000
+      SERVER_PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  ws:
+    build:
+      context: .
+      dockerfile: apps/ws/Dockerfile
+    restart: always
+    networks:
+      - app_network
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
+      WS_PORT: 3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  workers:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    restart: always
+    networks:
+      - app_network
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_EMAIL: ${RESEND_EMAIL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  client:
+    build:
+      context: .
+      dockerfile: apps/client/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+        NEXT_PUBLIC_WS_URL: ws://localhost:3002
+    restart: always
+    networks:
+      - app_network
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - httpserver
+      - ws
+
+  demo:
+    build:
+      context: .
+      dockerfile: apps/demo/Dockerfile
+    restart: always
+    networks:
+      - app_network
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      NOTIFY_API_URL: http://httpserver:3001
+    depends_on:
+      - httpserver
+      - workers
