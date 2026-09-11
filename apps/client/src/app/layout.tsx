@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   },
   description:
     "Send email, webhook, and in-app notifications with a single API call.",
-  metadataBase: new URL("https://yourproductiondomain.com"),
+  metadataBase: new URL("http://notify.snaplabs.me"),
   robots: {
     index: true,
     follow: true,
