@@ -42,9 +42,7 @@ services:
       retries: 10
 
   migrate:
-    build:
-      context: .
-      dockerfile: apps/httpserver/Dockerfile
+    image: ghcr.io/shivam6497/notify-httpserver:latest
     networks:
       - app_network
     environment:
@@ -64,9 +62,7 @@ services:
     restart: on-failure
 
   httpserver:
-    build:
-      context: .
-      dockerfile: apps/httpserver/Dockerfile
+    image: ghcr.io/shivam6497/notify-httpserver:latest
     restart: always
     networks:
       - app_network
@@ -94,9 +90,7 @@ services:
         condition: service_completed_successfully
 
   ws:
-    build:
-      context: .
-      dockerfile: apps/ws/Dockerfile
+    image: ghcr.io/shivam6497/notify-ws:latest
     restart: always
     networks:
       - app_network
@@ -118,9 +112,7 @@ services:
         condition: service_completed_successfully
 
   workers:
-    build:
-      context: .
-      dockerfile: apps/workers/Dockerfile
+    image: ghcr.io/shivam6497/notify-workers:latest
     restart: always
     networks:
       - app_network
@@ -139,12 +131,7 @@ services:
         condition: service_completed_successfully
 
   client:
-    build:
-      context: .
-      dockerfile: apps/client/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:3001
-        NEXT_PUBLIC_WS_URL: ws://localhost:3002
+    image: ghcr.io/shivam6497/notify-client:latest
     restart: always
     networks:
       - app_network
@@ -157,9 +144,7 @@ services:
       - ws
 
   demo:
-    build:
-      context: .
-      dockerfile: apps/demo/Dockerfile
+    image: ghcr.io/shivam6497/notify-demo:latest
     restart: always
     networks:
       - app_network
