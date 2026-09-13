@@ -6,12 +6,12 @@ import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/index";
 import { login, loginWithGoogle } from "@/lib/api/index";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Eye, EyeOff } from "lucide-react";
 
+// Login Page
 export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useAuthStore();
