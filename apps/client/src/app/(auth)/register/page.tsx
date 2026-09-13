@@ -15,6 +15,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 type Step = "register" | "verify";
 
+// Register Page
 export default function RegisterPage() {
   const router = useRouter();
   const { setUser } = useAuthStore();
