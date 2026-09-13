@@ -67,7 +67,7 @@ services:
     networks:
       - app_network
     ports:
-      - "3001:3001"
+      - "${SERVER_PORT}:${SERVER_PORT}"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -79,8 +79,8 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_EMAIL: ${RESEND_EMAIL}
-      CLIENT_URL: http://localhost:3000
-      SERVER_PORT: 3001
+      CLIENT_URL: ${CLIENT_URL}
+      SERVER_PORT: ${SERVER_PORT}
     depends_on:
       postgres:
         condition: service_healthy
