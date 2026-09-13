@@ -16,6 +16,8 @@ import bcrypt from "bcryptjs";
 /**
  * Middleware to authenticate requests using developer API keys.
  */
+
+// API key authentication
 export async function apiKeyAuth(
     req: Request,
     res: Response,
