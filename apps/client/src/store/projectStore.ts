@@ -12,6 +12,8 @@ interface Project {
   };
 }
 
+// Project state
+
 interface ProjectState {
   currentProject: Project | null;
   setCurrentProject: (project: Project | null) => void;
